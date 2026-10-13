@@ -1,6 +1,9 @@
 name: Build Distributions
 
 on:
+  # TEMP: registers the workflow on the fork so it can be dispatched; remove before merging.
+  push:
+    branches: [ release-wheels ]
   pull_request:
     branches: [ main ]
     paths:
