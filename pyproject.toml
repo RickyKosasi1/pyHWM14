@@ -76,6 +76,12 @@ test-command = "pytest tests"
 before-all = "gfortran --version"
 environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION"]
 
+[tool.cibuildwheel.macos]
+# delocate bundles libgfortran into the wheel and refuses libraries built for a
+# newer macOS than this, so FC must point at a gfortran whose runtime targets
+# 11.0 or older; the release workflow uses conda-forge's.
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
+
 [tool.cibuildwheel.windows]
 # Needs MinGW-w64 (UCRT) gcc/gfortran on PATH; the release workflow installs it
 # via MSYS2. delvewheel bundles libgfortran and friends from that same PATH.

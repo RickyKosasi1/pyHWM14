@@ -111,7 +111,7 @@ jobs:
           ls -1 dist/
           missing=0
           for py in cp312 cp313 cp314; do
-            for plat in "manylinux*_x86_64" "manylinux*_aarch64" "macosx_*_x86_64" "macosx_*_arm64" "win_amd64"; do
+            for plat in "manylinux*_x86_64" "manylinux*_aarch64" "macosx_11_0_x86_64" "macosx_11_0_arm64" "win_amd64"; do
               if ! compgen -G "dist/pyhwm2014-*-${py}-${py}-*${plat}.whl" > /dev/null; then
                 echo "::error::Missing ${py} wheel for ${plat}"
                 missing=1

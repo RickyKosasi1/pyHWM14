@@ -214,9 +214,10 @@ wheels have to come from cibuildwheel. The wheel build also runs on pull request
 `pyproject.toml`, `CMakeLists.txt`, `source/`, or the workflow, and can be started manually
 from **Actions → Build Distributions**.
 
-macOS wheels require the macOS release of the runner that built them (currently 14 on arm64
-and 15 on x86_64), because Homebrew's libgfortran is bundled into the wheel. Older macOS
-versions fall back to the sdist, which needs gfortran.
+macOS wheels target macOS 11.0 on both x86_64 and arm64. They are built with conda-forge's
+gfortran because its libgfortran (bundled into each wheel) targets 11.0; Homebrew's only
+targets the runner's own macOS release. The wheel job fails if any bundled binary needs a
+newer macOS than 11.0.
 
 ### TestPyPI Dry Run (Recommended Before Major Releases)
 
