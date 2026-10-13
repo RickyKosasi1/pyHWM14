@@ -84,14 +84,14 @@ jobs:
           sdk="$(xcrun --show-sdk-path)"
           "${prefix}/bin/gfortran" --version
           "${prefix}/bin/clang" --version
-          # The runtime libraries are @rpath-linked, so delocate needs an rpath
-          # to find and bundle them.
           {
             echo "FC=${prefix}/bin/gfortran"
             # cctools as otherwise looks for a versioned clang (clang-NN) on
             # PATH, and the env isn't activated.
             echo "CCTOOLS_CLANG_AS_EXECUTABLE=${prefix}/bin/clang"
             echo "SDKROOT=${sdk}"
+            # The runtime libraries are @rpath-linked, so delocate needs an
+            # rpath to find and bundle them.
             echo "LDFLAGS=-isysroot ${sdk} -Wl,-rpath,${prefix}/lib"
           } >> "${GITHUB_ENV}"
 
