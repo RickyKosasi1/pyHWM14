@@ -502,3 +502,60 @@ class TestDataPathConfiguration:
 
         assert HWMPATH is not None
         assert os.path.exists(HWMPATH) or "HWMPATH" in os.environ
+
+    def test_check_data_path_accepts_installed_data(self) -> None:
+        """
+        Test that the installed data directory passes the check.
+        """
+        from pyhwm2014 import HWMPATH
+        from pyhwm2014.data import check_data_path
+
+        check_data_path(HWMPATH)
+
+    def test_check_data_path_reports_missing_files(self, tmp_path) -> None:
+        """
+        Test that missing data files raise FileNotFoundError naming them.
+        """
+        from pyhwm2014.data import check_data_path
+
+        (tmp_path / "gd2qd.dat").write_bytes(b"")
+        with pytest.raises(FileNotFoundError, match="hwm123114.bin, dwm07b104i.dat"):
+            check_data_path(str(tmp_path))
+
+    def test_check_data_path_rejects_overlong_path(self) -> None:
+        """
+        Test that a path too long for the Fortran buffer is rejected.
+        """
+        from pyhwm2014.data import check_data_path
+
+        with pytest.raises(FileNotFoundError, match="longer than 1024 bytes"):
+            check_data_path("/" + "x" * 1024)
+
+    def test_missing_data_file_exits_nonzero(self, tmp_path) -> None:
+        """
+        Test that the Fortran code failing to find a data file fails the process.
+
+        It terminates the interpreter, so this must be a non-zero exit rather
+        than the zero status a plain Fortran STOP gives.
+        """
+        import subprocess
+        import sys
+
+        code = (
+            "import os\n"
+            "from pyhwm2014 import HWM14\n"
+            "os.environ['HWMPATH'] = os.getcwd()\n"
+            "HWM14(altlim=[90, 100], altstp=10, ap=[-1, 35], day=323, option=1,\n"
+            "      ut=12, verbose=False, year=1993)\n"
+            "print('model returned without its data files')\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert result.returncode != 0
+        assert "Can not find file" in result.stderr
+        assert "model returned" not in result.stdout

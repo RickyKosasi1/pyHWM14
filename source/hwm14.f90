@@ -1449,6 +1449,7 @@ end function latwgt2
 
 subroutine findandopen(datafile,unitid)
 
+    use iso_fortran_env, only: error_unit
     implicit none
 
     character(128)      :: datafile
@@ -1491,8 +1492,10 @@ subroutine findandopen(datafile,unitid)
     if (havefile) then
         return
     else
-        print *,"Can not find file ",trim(datafile)
-        stop
+        ! A plain STOP exits with status 0, which from inside Python looks like
+        ! success; ERROR STOP makes the failure visible to the caller.
+        write(error_unit,*) "Can not find file ",trim(datafile)
+        error stop 1
     endif
 
 end subroutine findandopen

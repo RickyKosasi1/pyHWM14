@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Dropped the `timeutil` runtime dependency: it is no longer on PyPI, which made `pip install pyhwm2014` fail; the library never imported it (only `scripts/pyhwmapps.py` does)
 - HWM14 data files are now found when the install path is longer than 128 characters (previously the Fortran code printed "Can not find file" and exited the interpreter)
+- A missing HWM14 data file no longer ends the Python process with exit status 0: `import pyhwm2014` raises `FileNotFoundError` naming the missing files, and the Fortran fallback now uses `ERROR STOP` (non-zero exit) instead of `STOP`
 
 ### Changed
 - Updated GitHub Actions versions (v3 → v4, v4 → v5)
