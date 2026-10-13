@@ -18,6 +18,11 @@ on:
         options:
           - testpypi
           - pypi
+      dry_run:
+        description: "Dry run: build and check everything, but skip the upload and post-publish verification"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -30,6 +35,7 @@ jobs:
       release_tag: ${{ steps.resolve.outputs.release_tag }}
       version: ${{ steps.resolve.outputs.version }}
       target_repository: ${{ steps.resolve.outputs.target_repository }}
+      dry_run: ${{ steps.resolve.outputs.dry_run }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -43,15 +49,23 @@ jobs:
           PUSH_TAG: ${{ github.ref_name }}
           INPUT_TAG: ${{ inputs.release_tag }}
           INPUT_TARGET: ${{ inputs.target_repository }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
 
           if [ "${EVENT_NAME}" = "push" ]; then
             RELEASE_TAG="${PUSH_TAG}"
             TARGET_REPOSITORY="pypi"
+            DRY_RUN="false"
           else
             RELEASE_TAG="${INPUT_TAG}"
             TARGET_REPOSITORY="${INPUT_TARGET}"
+            DRY_RUN="${INPUT_DRY_RUN}"
+          fi
+
+          if [ "${DRY_RUN}" != "true" ] && [ "${DRY_RUN}" != "false" ]; then
+            echo "dry_run must be true or false, got '${DRY_RUN}'."
+            exit 1
           fi
 
           if ! printf '%s' "${RELEASE_TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9.-]+)?$'; then
@@ -71,6 +85,7 @@ jobs:
           echo "release_tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "target_repository=${TARGET_REPOSITORY}" >> "${GITHUB_OUTPUT}"
+          echo "dry_run=${DRY_RUN}" >> "${GITHUB_OUTPUT}"
 
   build:
     name: Build distributions
@@ -157,14 +172,26 @@ jobs:
           merge-multiple: true
           path: dist/
 
+      - name: List distributions to upload
+        env:
+          DRY_RUN: ${{ needs.resolve-release.outputs.dry_run }}
+          TARGET_REPOSITORY: ${{ needs.resolve-release.outputs.target_repository }}
+        run: |
+          ls -l dist/
+          if [ "${DRY_RUN}" != "false" ]; then
+            echo "::notice::Dry run: skipping upload of $(ls dist | wc -l) files to ${TARGET_REPOSITORY}"
+          fi
+
+      # The upload steps require dry_run to be exactly 'false', so a missing
+      # or unexpected value skips the upload rather than performing it.
       - name: Publish distribution to PyPI
-        if: ${{ needs.resolve-release.outputs.target_repository == 'pypi' }}
+        if: ${{ needs.resolve-release.outputs.dry_run == 'false' && needs.resolve-release.outputs.target_repository == 'pypi' }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
 
       - name: Publish distribution to TestPyPI
-        if: ${{ needs.resolve-release.outputs.target_repository == 'testpypi' }}
+        if: ${{ needs.resolve-release.outputs.dry_run == 'false' && needs.resolve-release.outputs.target_repository == 'testpypi' }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
@@ -174,6 +201,7 @@ jobs:
     name: Verify published package
     runs-on: ubuntu-latest
     needs: [resolve-release, publish]
+    if: ${{ needs.resolve-release.outputs.dry_run == 'false' }}
     steps:
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
