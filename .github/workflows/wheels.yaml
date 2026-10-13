@@ -73,7 +73,8 @@ jobs:
         uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: gfortran
-          create-args: -c conda-forge gfortran
+          # conda-forge's assembler driver runs the clang from the same env.
+          create-args: -c conda-forge gfortran clang
           init-shell: none
 
       - name: Point the build at conda-forge gfortran (macOS)
