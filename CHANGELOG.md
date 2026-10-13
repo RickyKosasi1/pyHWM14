@@ -16,9 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Coverage reporting in CI pipeline via Codecov
 - Security vulnerability scanning with pip-audit
 - Dedicated release workflow for trusted publishing to PyPI/TestPyPI from version tags
+- Binary wheels for CPython 3.12–3.14 on Linux (x86_64, aarch64), macOS (x86_64, arm64), and Windows (x86_64), built with cibuildwheel, so `pip install` no longer needs a Fortran compiler
 
 ### Fixed
-- (Pending)
+- Dropped the `timeutil` runtime dependency: it is no longer on PyPI, which made `pip install pyhwm2014` fail; the library never imported it (only `scripts/pyhwmapps.py` does)
+- HWM14 data files are now found when the install path is longer than 128 characters (previously the Fortran code printed "Can not find file" and exited the interpreter)
 
 ### Changed
 - Updated GitHub Actions versions (v3 → v4, v4 → v5)

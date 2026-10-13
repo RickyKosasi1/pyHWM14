@@ -1,0 +1,145 @@
+name: Build Distributions
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - pyproject.toml
+      - CMakeLists.txt
+      - source/**
+      - .github/workflows/wheels.yaml
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to build"
+        required: true
+        type: string
+      version:
+        description: "Version stamped on the distributions (overrides setuptools-scm)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    name: Wheels (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-latest
+          - name: linux-aarch64
+            os: ubuntu-24.04-arm
+          - name: macos-x86_64
+            os: macos-15-intel
+          - name: macos-arm64
+            os: macos-14
+          - name: windows-amd64
+            os: windows-latest
+    steps:
+      # pyhwm2014/data is a symlink to ../data; without this Git for Windows
+      # checks it out as a plain text file and the data files go missing.
+      - name: Enable symlinks (Windows)
+        if: runner.os == 'Windows'
+        run: git config --global core.symlinks true
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Check data symlink
+        shell: bash
+        run: test -f pyhwm2014/data/hwm123114.bin
+
+      - name: Pin release version
+        if: inputs.version != ''
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: echo "SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION}" >> "${GITHUB_ENV}"
+
+      # Homebrew's libgfortran targets the runner's macOS release and delocate
+      # bundles it into the wheel, so the wheel can't claim an older target.
+      - name: Install gfortran (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+        run: |
+          brew install gcc@14
+          echo "FC=gfortran-14" >> "${GITHUB_ENV}"
+          echo "MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion | cut -d. -f1).0" >> "${GITHUB_ENV}"
+
+      - name: Install MinGW-w64 gfortran (Windows)
+        if: runner.os == 'Windows'
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-gcc-fortran
+
+      - name: Put MinGW-w64 on PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        run: Add-Content -Path $env:GITHUB_PATH -Value "$env:MSYS2_LOCATION\ucrt64\bin"
+
+      - name: Build and test wheels
+        uses: pypa/cibuildwheel@v3.4.1
+        with:
+          output-dir: wheelhouse
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-wheels-${{ matrix.name }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: Source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Pin release version
+        if: inputs.version != ''
+        env:
+          VERSION: ${{ inputs.version }}
+        run: echo "SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install gfortran
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran
+
+      - name: Build source distribution
+        run: uv build --sdist --out-dir dist
+
+      - name: Check the sdist builds a wheel
+        run: uv build --wheel --out-dir /tmp/sdist-wheel dist/*.tar.gz
+
+      - name: Upload source distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error

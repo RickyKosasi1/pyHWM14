@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core", "numpy", "meson", "setuptools-scm>=8"]
+requires = ["scikit-build-core", "numpy>=2.0", "meson", "ninja", "setuptools-scm>=8"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -22,10 +22,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "numpy>=1.23",
-    "timeutil",
 ]
 
 [project.optional-dependencies]
@@ -59,6 +59,26 @@ wheel.packages = ["pyhwm2014"]
 metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
 
 [tool.setuptools_scm]
+
+[tool.cibuildwheel]
+build = "cp312-* cp313-* cp314-*"
+skip = "*-musllinux_*"
+# Run the suite from a copy of tests/ so pytest imports the installed wheel,
+# not the uncompiled package in the source tree.
+test-sources = ["tests"]
+test-requires = ["pytest"]
+test-command = "pytest tests"
+
+[tool.cibuildwheel.linux]
+before-all = "gfortran --version"
+environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION"]
+
+[tool.cibuildwheel.windows]
+# Needs MinGW-w64 (UCRT) gcc/gfortran on PATH; the release workflow installs it
+# via MSYS2. delvewheel bundles libgfortran and friends from that same PATH.
+environment = { CMAKE_GENERATOR = "Ninja", CC = "gcc", FC = "gfortran" }
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

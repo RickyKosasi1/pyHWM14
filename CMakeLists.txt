@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.15...3.27)
-project(pyhwm2014 LANGUAGES Fortran C)
+# CMake compiles nothing itself: f2py (Meson backend) drives the C and Fortran
+# compilers, so don't make CMake probe for them.
+project(pyhwm2014 LANGUAGES NONE)
 
 # Find Python
-find_package(Python 3.12 COMPONENTS Interpreter Development REQUIRED)
+find_package(Python 3.12 COMPONENTS Interpreter REQUIRED)
 
 # Get NumPy location
 execute_process(

@@ -74,16 +74,25 @@ jobs:
 
   build:
     name: Build distributions
-    runs-on: ubuntu-latest
     needs: resolve-release
     permissions:
       contents: read
+    uses: ./.github/workflows/wheels.yaml
+    with:
+      ref: ${{ needs.resolve-release.outputs.release_tag }}
+      version: ${{ needs.resolve-release.outputs.version }}
+
+  check:
+    name: Check distributions
+    runs-on: ubuntu-latest
+    needs: [resolve-release, build]
     steps:
-      - name: Checkout tagged source
-        uses: actions/checkout@v4
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4.1.3
         with:
-          ref: ${{ needs.resolve-release.outputs.release_tag }}
-          fetch-depth: 0
+          pattern: dist-*
+          merge-multiple: true
+          path: dist/
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
@@ -93,31 +102,32 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Install Linux build prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gfortran
-
-      - name: Install build tooling
-        run: |
-          uv pip install --system build twine
-
-      - name: Build source distribution
-        run: python -m build --sdist
-
-      - name: Build wheel
-        run: python -m build --wheel
-
       - name: Validate built artifacts
-        run: python -m twine check dist/*
+        run: uvx twine check --strict dist/*
+
+      - name: Require a wheel for every supported Python and platform
+        run: |
+          set -euo pipefail
+          ls -1 dist/
+          missing=0
+          for py in cp312 cp313 cp314; do
+            for plat in "manylinux*_x86_64" "manylinux*_aarch64" "macosx_*_x86_64" "macosx_*_arm64" "win_amd64"; do
+              if ! compgen -G "dist/pyhwm2014-*-${py}-${py}-*${plat}.whl" > /dev/null; then
+                echo "::error::Missing ${py} wheel for ${plat}"
+                missing=1
+              fi
+            done
+          done
+          compgen -G "dist/pyhwm2014-*.tar.gz" > /dev/null || { echo "::error::Missing sdist"; missing=1; }
+          exit "${missing}"
 
       - name: Smoke test wheel install and import
         env:
           EXPECTED_VERSION: ${{ needs.resolve-release.outputs.version }}
         run: |
           python -m venv /tmp/release-smoke
-          uv pip install --python /tmp/release-smoke/bin/python --upgrade pip
-          uv pip install --python /tmp/release-smoke/bin/python dist/*.whl
+          uv pip install --python /tmp/release-smoke/bin/python --no-index --find-links dist/ --only-binary :all: --no-deps pyhwm2014
+          uv pip install --python /tmp/release-smoke/bin/python numpy
           /tmp/release-smoke/bin/python - <<'PY'
           import os
           import pyhwm2014
@@ -128,16 +138,10 @@ jobs:
           print(f"Smoke test passed for pyhwm2014 {pyhwm2014.__version__}")
           PY
 
-      - name: Upload distribution artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-package-distributions
-          path: dist/
-
   publish:
     name: Publish to package index
     runs-on: ubuntu-latest
-    needs: [resolve-release, build]
+    needs: [resolve-release, check]
     permissions:
       id-token: write
       contents: read
@@ -149,7 +153,8 @@ jobs:
       - name: Download distribution artifacts
         uses: actions/download-artifact@v4.1.3
         with:
-          name: python-package-distributions
+          pattern: dist-*
+          merge-multiple: true
           path: dist/
 
       - name: Publish distribution to PyPI

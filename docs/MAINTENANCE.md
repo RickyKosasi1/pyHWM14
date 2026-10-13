@@ -58,8 +58,8 @@ This guide documents the maintenance and release process for pyHWM14, intended f
 
 2. **GitHub Actions will automatically:**
    - Run dedicated release workflow (`.github/workflows/release-pypi.yaml`)
-   - Build source and wheel distributions
-   - Validate package metadata and wheel installability
+   - Build the sdist and binary wheels for CPython 3.12–3.14 on Linux (x86_64, aarch64), macOS (x86_64, arm64), and Windows (x86_64) via `.github/workflows/wheels.yaml`
+   - Validate package metadata, require every expected wheel, and smoke-test installability
    - Publish to PyPI via Trusted Publishing (OIDC)
    - Run post-publish install/import verification
 
@@ -196,18 +196,27 @@ Dependabot automatically checks for updates:
 When you push a tag `v*`, GitHub Actions release workflow:
 1. Resolves release version from the git tag (`vX.Y.Z` → `X.Y.Z`) using dynamic versioning
 2. Verifies the tag commit is reachable from `main`
-3. Builds wheel + source distribution
-4. Runs artifact checks (`twine check`) and wheel smoke test
+3. Builds the source distribution and cibuildwheel wheels (`.github/workflows/wheels.yaml`); each wheel bundles libgfortran and runs the test suite
+4. Runs artifact checks (`twine check`), fails if any Python/platform wheel is missing, and runs a wheel smoke test
 5. Publishes to PyPI with Trusted Publishing (OIDC)
 6. Verifies install/import from package index
 
 **Manual PyPI upload** (if needed):
 ```bash
-# Emergency fallback only (not the default path)
-python -m pip install build twine
-python -m build
+# Emergency fallback only (not the default path).
+# Download every dist-* artifact from a successful "Build Distributions" run into dist/, then:
+python -m pip install twine
 python -m twine upload dist/*
 ```
+
+A plain `python -m build` wheel is tagged `linux_x86_64` and PyPI rejects it; publishable
+wheels have to come from cibuildwheel. The wheel build also runs on pull requests that touch
+`pyproject.toml`, `CMakeLists.txt`, `source/`, or the workflow, and can be started manually
+from **Actions → Build Distributions**.
+
+macOS wheels require the macOS release of the runner that built them (currently 14 on arm64
+and 15 on x86_64), because Homebrew's libgfortran is bundled into the wheel. Older macOS
+versions fall back to the sdist, which needs gfortran.
 
 ### TestPyPI Dry Run (Recommended Before Major Releases)
 
